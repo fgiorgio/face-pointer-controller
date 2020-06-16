@@ -157,7 +157,7 @@ def main():
         if args.intermediate_output is not None:
             frame = cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (255, 255, 255), 2)
 
-        cropped_face = frame[y_min:y_max, x_min:x_max]
+        cropped_face = frame[y_min:y_max, x_min:x_max].copy()
         cropped_face_width = cropped_face.shape[1]
         cropped_face_height = cropped_face.shape[0]
 
@@ -185,6 +185,17 @@ def main():
                 0
             )
             draw_axes(frame, center_of_face, yaw, pitch, roll, scale, focal_length)
+
+        # GAZE ESTIMATOR
+        gaze_estimator_input = gaze_estimator.preprocess_input(
+            cropped_face,
+            face_detector_prediction,
+            head_pose_estimator_prediction
+        )
+        gaze_estimator_output = gaze_estimator.predict(gaze_estimator_input)
+        gaze_estimator_prediction = gaze_estimator.preprocess_output(gaze_estimator_output)
+
+        print(gaze_estimator_prediction)
 
         cv2.imshow('frame', frame)
 
