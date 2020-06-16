@@ -4,6 +4,8 @@ import time
 import socket
 import json
 import cv2
+import math
+import numpy as np
 from argparse import ArgumentParser
 from input_feeder import InputFeeder
 from face_detection import ModelFaceDetection
@@ -41,6 +43,62 @@ def build_argparser():
     parser.add_argument("-io", "--intermediate_output", nargs='?', const='',
                         help="Show the outputs of intermediate models")
     return parser
+
+
+def build_camera_matrix(center_of_face, focal_length):
+    cx = int(center_of_face[0])
+    cy = int(center_of_face[1])
+    camera_matrix = np.zeros((3, 3), dtype='float32')
+    camera_matrix[0][0] = focal_length
+    camera_matrix[0][2] = cx
+    camera_matrix[1][1] = focal_length
+    camera_matrix[1][2] = cy
+    camera_matrix[2][2] = 1
+    return camera_matrix
+
+
+def draw_axes(frame, center_of_face, yaw, pitch, roll, scale, focal_length):
+    yaw *= np.pi / 180.0
+    pitch *= np.pi / 180.0
+    roll *= np.pi / 180.0
+    cx = int(center_of_face[0])
+    cy = int(center_of_face[1])
+    rx = np.array([[1, 0, 0], [0, math.cos(pitch), -math.sin(pitch)], [0, math.sin(pitch), math.cos(pitch)]])
+    ry = np.array([[math.cos(yaw), 0, -math.sin(yaw)], [0, 1, 0], [math.sin(yaw), 0, math.cos(yaw)]])
+    rz = np.array([[math.cos(roll), -math.sin(roll), 0], [math.sin(roll), math.cos(roll), 0], [0, 0, 1]])
+    # R = np.dot(Rz, Ry, Rx)
+    # ref: https://www.learnopencv.com/rotation-matrix-to-euler-angles/
+    # R = np.dot(Rz, np.dot(Ry, Rx))
+    r = rz @ ry @ rx
+    # print(R)
+    camera_matrix = build_camera_matrix(center_of_face, focal_length)
+    xaxis = np.array(([1 * scale, 0, 0]), dtype='float32').reshape(3, 1)
+    yaxis = np.array(([0, -1 * scale, 0]), dtype='float32').reshape(3, 1)
+    zaxis = np.array(([0, 0, -1 * scale]), dtype='float32').reshape(3, 1)
+    zaxis1 = np.array(([0, 0, 1 * scale]), dtype='float32').reshape(3, 1)
+    o = np.array(([0, 0, 0]), dtype='float32').reshape(3, 1)
+    o[2] = camera_matrix[0][0]
+    xaxis = np.dot(r, xaxis) + o
+    yaxis = np.dot(r, yaxis) + o
+    zaxis = np.dot(r, zaxis) + o
+    zaxis1 = np.dot(r, zaxis1) + o
+    xp2 = (xaxis[0] / xaxis[2] * camera_matrix[0][0]) + cx
+    yp2 = (xaxis[1] / xaxis[2] * camera_matrix[1][1]) + cy
+    p2 = (int(xp2), int(yp2))
+    cv2.line(frame, (cx, cy), p2, (0, 0, 255), 2)
+    xp2 = (yaxis[0] / yaxis[2] * camera_matrix[0][0]) + cx
+    yp2 = (yaxis[1] / yaxis[2] * camera_matrix[1][1]) + cy
+    p2 = (int(xp2), int(yp2))
+    cv2.line(frame, (cx, cy), p2, (0, 255, 0), 2)
+    xp1 = (zaxis1[0] / zaxis1[2] * camera_matrix[0][0]) + cx
+    yp1 = (zaxis1[1] / zaxis1[2] * camera_matrix[1][1]) + cy
+    p1 = (int(xp1), int(yp1))
+    xp2 = (zaxis[0] / zaxis[2] * camera_matrix[0][0]) + cx
+    yp2 = (zaxis[1] / zaxis[2] * camera_matrix[1][1]) + cy
+    p2 = (int(xp2), int(yp2))
+    cv2.line(frame, (cx, cy), p2, (255, 0, 0), 2)
+    # cv2.circle(frame, p2, 3, (255, 0, 0), 2)
+    return frame
 
 
 def main():
@@ -112,6 +170,21 @@ def main():
                 x = x_min + int(face_detector_prediction[i] * cropped_face_width)
                 y = y_min + int(face_detector_prediction[i+1] * cropped_face_height)
                 frame = cv2.circle(frame, (x, y), 2, (255, 255, 255), 2)
+
+        # HEAD POSE ESTIMATOR
+        head_pose_estimator_frame = head_pose_estimator.preprocess_input(cropped_face)
+        head_pose_estimator_output = head_pose_estimator.predict(head_pose_estimator_frame)
+        head_pose_estimator_prediction = head_pose_estimator.preprocess_output(head_pose_estimator_output)
+        if args.intermediate_output is not None:
+            yaw, pitch, roll = head_pose_estimator_prediction
+            focal_length = 950.0
+            scale = 100
+            center_of_face = (
+                x_min + int(face_detector_prediction[4] * cropped_face_width),
+                y_min + int(face_detector_prediction[5] * cropped_face_height),
+                0
+            )
+            draw_axes(frame, center_of_face, yaw, pitch, roll, scale, focal_length)
 
         cv2.imshow('frame', frame)
 
