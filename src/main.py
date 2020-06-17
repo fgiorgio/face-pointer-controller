@@ -12,6 +12,7 @@ from face_detection import ModelFaceDetection
 from facial_landmarks_detections import ModelFacialLandmarksDetections
 from gaze_estimation import ModelGazeEstimation
 from head_pose_estimation import ModelHeadPoseEstimation
+from mouse_controller import MouseController
 
 
 def build_argparser():
@@ -42,6 +43,10 @@ def build_argparser():
                         help="Probability threshold for Head Pose Estimator model estimations (0.5 by default)")
     parser.add_argument("-io", "--intermediate_output", nargs='?', const='',
                         help="Show the outputs of intermediate models")
+    parser.add_argument("-mp", "--mouse_precision", type=str, default='medium',
+                        help="Mouse controller precision: low, medium (default), high")
+    parser.add_argument("-ms", "--mouse_speed", type=str, default='medium',
+                        help="Mouse controller speed: slow, medium (default), fast")
     return parser
 
 
@@ -195,7 +200,9 @@ def main():
         gaze_estimator_output = gaze_estimator.predict(gaze_estimator_input)
         gaze_estimator_prediction = gaze_estimator.preprocess_output(gaze_estimator_output)
 
-        print(gaze_estimator_prediction)
+        # MOUSE CONTROLLER
+        mouse_controller = MouseController(args.mouse_precision, args.mouse_speed)
+        mouse_controller.move(gaze_estimator_prediction[0], gaze_estimator_prediction[1])
 
         cv2.imshow('frame', frame)
 
