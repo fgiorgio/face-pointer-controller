@@ -1,11 +1,7 @@
-import os
-import sys
-import time
-import socket
-import json
 import cv2
 import math
 import numpy as np
+import logging
 from argparse import ArgumentParser
 from input_feeder import InputFeeder
 from face_detection import ModelFaceDetection
@@ -107,10 +103,12 @@ def draw_axes(frame, center_of_face, yaw, pitch, roll, scale, focal_length):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     args = build_argparser().parse_args()
 
     input_feeder = InputFeeder(args.input_type, args.input_path)
     input_feeder.load_data()
+    logging.info('Input ready')
 
     face_detector = ModelFaceDetection(
         args.model_face_detector,
@@ -141,7 +139,9 @@ def main():
     facial_landmarks_detector.load_model()
     gaze_estimator.load_model()
     head_pose_estimator.load_model()
+    logging.info('Models loaded')
 
+    logging.info('Starting inference')
     for frame in input_feeder.next_batch():
         key_pressed = cv2.waitKey(1)
 
@@ -199,6 +199,7 @@ def main():
         )
         gaze_estimator_output = gaze_estimator.predict(gaze_estimator_input)
         gaze_estimator_prediction = gaze_estimator.preprocess_output(gaze_estimator_output)
+        logging.info('Output: ' + str(gaze_estimator_prediction[:2]))
 
         # MOUSE CONTROLLER
         mouse_controller = MouseController(args.mouse_precision, args.mouse_speed)
@@ -207,9 +208,11 @@ def main():
         cv2.imshow('frame', frame)
 
         if key_pressed & 0xFF == ord('q'):
+            logging.info('Inference stopped')
             break
 
     input_feeder.close()
+    logging.info('Inference finished')
 
 
 if __name__ == '__main__':
